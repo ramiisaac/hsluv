@@ -39,6 +39,17 @@ function isValidHsluv(h: number, s: number, l: number): boolean {
 }
 
 /**
+ * Validates that HPLuv values are within acceptable ranges
+ * @param h - Hue (0-360)
+ * @param p - Percent (0-100)
+ * @param l - Lightness (0-100)
+ * @returns boolean - True if valid, false otherwise
+ */
+function isValidHpluv(h: number, p: number, l: number): boolean {
+  return h >= 0 && h <= 360 && p >= 0 && p <= 100 && l >= 0 && l <= 100;
+}
+
+/**
  * Validates that RGB values are within acceptable ranges
  * @param r - Red (0-255)
  * @param g - Green (0-255)
@@ -711,12 +722,21 @@ pack.addFormula({
   ],
   resultType: coda.ValueType.String,
   execute: async function ([h, p, l], context) {
-    let color = new Hsluv();
-    color.hpluv_h = h;
-    color.hpluv_p = p;
-    color.hpluv_l = l;
-    color.hpluvToHex();
-    return color.hex;
+    // Validate input values
+    if (!isValidHpluv(h, p, l)) {
+      throw new coda.UserVisibleError("Invalid HPLuv values. Hue must be 0-360, Percent and Lightness must be 0-100.");
+    }
+    
+    try {
+      let color = new Hsluv();
+      color.hpluv_h = h;
+      color.hpluv_p = p;
+      color.hpluv_l = l;
+      color.hpluvToHex();
+      return color.hex;
+    } catch (error) {
+      throw new coda.UserVisibleError("Failed to convert HPLuv to Hex: " + error.message);
+    }
   },
 });
 
@@ -749,14 +769,23 @@ pack.addFormula({
     idProperty: "h",
   }),
   execute: async function ([hex], context) {
-    let color = new Hsluv();
-    color.hex = hex;
-    color.hexToHpluv();
-    return {
-      h: color.hpluv_h,
-      p: color.hpluv_p,
-      l: color.hpluv_l,
-    };
+    // Validate input hex color
+    if (!isValidHexColor(hex)) {
+      throw new coda.UserVisibleError("Invalid hex color format. Please use #RRGGBB format (e.g., #FF0000).");
+    }
+    
+    try {
+      let color = new Hsluv();
+      color.hex = hex;
+      color.hexToHpluv();
+      return {
+        h: Math.round(color.hpluv_h * 100) / 100, // Round to 2 decimal places
+        p: Math.round(color.hpluv_p * 100) / 100,
+        l: Math.round(color.hpluv_l * 100) / 100,
+      };
+    } catch (error) {
+      throw new coda.UserVisibleError("Failed to convert Hex to HPLuv: " + error.message);
+    }
   },
 });
 
@@ -773,12 +802,21 @@ pack.addFormula({
   ],
   resultType: coda.ValueType.String,
   execute: async function ([hex], context) {
-    let color = new Hsluv();
-    color.hex = hex;
-    color.hexToHsluv();
-    color.hsluv_h = (color.hsluv_h + 180) % 360;
-    color.hsluvToHex();
-    return color.hex;
+    // Validate input hex color
+    if (!isValidHexColor(hex)) {
+      throw new coda.UserVisibleError("Invalid hex color format. Please use #RRGGBB format (e.g., #FF0000).");
+    }
+    
+    try {
+      let color = new Hsluv();
+      color.hex = hex;
+      color.hexToHsluv();
+      color.hsluv_h = (color.hsluv_h + 180) % 360;
+      color.hsluvToHex();
+      return color.hex;
+    } catch (error) {
+      throw new coda.UserVisibleError("Failed to generate complementary color: " + error.message);
+    }
   },
 });
 
@@ -804,16 +842,31 @@ pack.addFormula({
     type: coda.ValueType.String,
   }),
   execute: async function ([baseColor, count], context) {
-    let color = new Hsluv();
-    color.hex = baseColor;
-    color.hexToHsluv();
-    let scheme = [];
-    for (let i = 0; i < count; i++) {
-      color.hsluv_l = (100 / (count - 1)) * i;
-      color.hsluvToHex();
-      scheme.push(color.hex as never);
+    // Validate input hex color
+    if (!isValidHexColor(baseColor)) {
+      throw new coda.UserVisibleError("Invalid hex color format. Please use #RRGGBB format (e.g., #FF0000).");
     }
-    return scheme;
+    
+    // Validate count
+    if (count < 1 || count > 20) {
+      throw new coda.UserVisibleError("Count must be between 1 and 20.");
+    }
+    
+    try {
+      let color = new Hsluv();
+      color.hex = baseColor;
+      color.hexToHsluv();
+      let scheme = [];
+      for (let i = 0; i < count; i++) {
+        // Create lightness variations for monochromatic scheme
+        color.hsluv_l = count === 1 ? color.hsluv_l : (100 / (count - 1)) * i;
+        color.hsluvToHex();
+        scheme.push(color.hex as never);
+      }
+      return scheme;
+    } catch (error) {
+      throw new coda.UserVisibleError("Failed to generate monochromatic scheme: " + error.message);
+    }
   },
 });
 
@@ -842,16 +895,35 @@ pack.addFormula({
     type: coda.ValueType.String,
   }),
   execute: async function ([baseColor, count, angle = 30], context) {
-    let color = new Hsluv();
-    color.hex = baseColor;
-    color.hexToHsluv();
-    let scheme = [color.hex];
-    for (let i = 1; i < count; i++) {
-      color.hsluv_h = rotateHue(color.hsluv_h, angle);
-      color.hsluvToHex();
-      scheme.push(color.hex);
+    // Validate input hex color
+    if (!isValidHexColor(baseColor)) {
+      throw new coda.UserVisibleError("Invalid hex color format. Please use #RRGGBB format (e.g., #FF0000).");
     }
-    return scheme;
+    
+    // Validate count
+    if (count < 1 || count > 20) {
+      throw new coda.UserVisibleError("Count must be between 1 and 20.");
+    }
+    
+    // Validate angle
+    if (angle < 1 || angle > 180) {
+      throw new coda.UserVisibleError("Angle must be between 1 and 180 degrees.");
+    }
+    
+    try {
+      let color = new Hsluv();
+      color.hex = baseColor;
+      color.hexToHsluv();
+      let scheme = [color.hex];
+      for (let i = 1; i < count; i++) {
+        color.hsluv_h = rotateHue(color.hsluv_h, angle);
+        color.hsluvToHex();
+        scheme.push(color.hex);
+      }
+      return scheme;
+    } catch (error) {
+      throw new coda.UserVisibleError("Failed to generate analogous scheme: " + error.message);
+    }
   },
 });
 
@@ -1293,14 +1365,35 @@ pack.addFormula({
     },
   }),
   execute: async function ([r, g, b], context) {
-    let c = 1 - r / 255;
-    let m = 1 - g / 255;
-    let y = 1 - b / 255;
-    let k = Math.min(c, m, y);
-    c = (c - k) / (1 - k);
-    m = (m - k) / (1 - k);
-    y = (y - k) / (1 - k);
-    return { c, m, y, k };
+    // Validate input RGB values
+    if (!isValidRgb(r, g, b)) {
+      throw new coda.UserVisibleError("Invalid RGB values. Red, Green, and Blue must be between 0 and 255.");
+    }
+    
+    try {
+      let c = 1 - r / 255;
+      let m = 1 - g / 255;
+      let y = 1 - b / 255;
+      let k = Math.min(c, m, y);
+      
+      // Avoid division by zero
+      if (k === 1) {
+        return { c: 0, m: 0, y: 0, k: 1 };
+      }
+      
+      c = (c - k) / (1 - k);
+      m = (m - k) / (1 - k);
+      y = (y - k) / (1 - k);
+      
+      return { 
+        c: Math.round(c * 100) / 100, 
+        m: Math.round(m * 100) / 100, 
+        y: Math.round(y * 100) / 100, 
+        k: Math.round(k * 100) / 100 
+      };
+    } catch (error) {
+      throw new coda.UserVisibleError("Failed to convert RGB to CMYK: " + error.message);
+    }
   },
 });
 
@@ -1338,10 +1431,19 @@ pack.addFormula({
     },
   }),
   execute: async function ([c, m, y, k], context) {
-    let r = 255 * (1 - c) * (1 - k);
-    let g = 255 * (1 - m) * (1 - k);
-    let b = 255 * (1 - y) * (1 - k);
-    return { r: Math.round(r), g: Math.round(g), b: Math.round(b) };
+    // Validate CMYK values (all should be between 0 and 1)
+    if (c < 0 || c > 1 || m < 0 || m > 1 || y < 0 || y > 1 || k < 0 || k > 1) {
+      throw new coda.UserVisibleError("Invalid CMYK values. All values must be between 0 and 1.");
+    }
+    
+    try {
+      let r = 255 * (1 - c) * (1 - k);
+      let g = 255 * (1 - m) * (1 - k);
+      let b = 255 * (1 - y) * (1 - k);
+      return { r: Math.round(r), g: Math.round(g), b: Math.round(b) };
+    } catch (error) {
+      throw new coda.UserVisibleError("Failed to convert CMYK to RGB: " + error.message);
+    }
   },
 });
 
