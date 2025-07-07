@@ -1,8 +1,6 @@
 import * as coda from "@codahq/packs-sdk";
 export const pack = coda.newPack();
 
-pack.addNetworkDomain("example.com");
-
 class Hsluv {
   hex: string;
   rgb_r: number;
@@ -1287,80 +1285,44 @@ pack.addFormula({
   },
 });
 
+
 pack.addColumnFormat({
   name: "ColorPreview",
-  instructions: "Displays color preview(s) based on the cell's hex value(s)",
+  instructions: "Displays a color preview based on the cell's hex value",
   formulaName: "ColorPreviewFormatter",
   matchers: [
     new RegExp("#[0-9A-Fa-f]{6}"),
-    new RegExp("#[0-9A-Fa-f]{6}(,\\s*#[0-9A-Fa-f]{6})*"), // Matches comma-separated hex colors
   ],
 });
 
 pack.addFormula({
   name: "ColorPreviewFormatter",
-  description: "Formats a cell with color preview(s) based on its hex value(s)",
+  description: "Formats a cell with a color preview based on its hex value",
   parameters: [
     coda.makeParameter({
       type: coda.ParameterType.String,
-      name: "input",
-      description: "The hex color value or comma-separated list of hex color values",
+      name: "hex",
+      description: "The hex color value",
     }),
   ],
   resultType: coda.ValueType.String,
-  codaType: coda.ValueHintType.ImageReference,
-  execute: async function ([input], context) {
-    // Function to validate and normalize hex color
-    function normalizeColor(hex) {
-      hex = hex.trim().replace(/^#/, '');
-      if (!/^[0-9A-Fa-f]{3,6}$/.test(hex)) {
-        console.warn(`Skipping invalid hex color: #${hex}`);
-        return null;
-      }
-      // Expand shorthand form (e.g. "03F") to full form (e.g. "0033FF")
-      if (hex.length < 6) {
-        hex = hex.split('').map(char => char + char).join('');
-      }
-      return '#' + hex;
+  execute: async function ([hex], context) {
+    // Validate the hex color
+    if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) {
+      throw new coda.UserVisibleError("Invalid hex color. Please use the format #RRGGBB.");
     }
 
-    // Function to generate SVG for a single color
-    function generateColorSVG(hex) {
-      const normalizedHex = normalizeColor(hex);
-      if (!normalizedHex) return null;
-      return `
-        <svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-          <rect width="20" height="20" fill="${normalizedHex}" />
-        </svg>
-      `.trim();
-    }
+    // Generate SVG
+    let svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">
+        <rect width="20" height="20" fill="${hex}" />
+      </svg>
+    `;
 
-    let colors = input.split(',');
-    let validSvgs = colors.map(generateColorSVG).filter(svg => svg !== null);
-
-    if (validSvgs.length === 0) {
-      throw new coda.UserVisibleError("No valid colors found. Please use 3 or 6-digit hex color codes (e.g., #RGB or #RRGGBB).");
-    }
-
-    let svg;
-    if (validSvgs.length > 1) {
-      // Handle multiple colors
-      svg = `
-        <svg viewBox="0 0 ${validSvgs.length * 22} 20" xmlns="http://www.w3.org/2000/svg">
-          ${validSvgs.map((colorSvg, index) => 
-            `<g transform="translate(${index * 22}, 0)">${colorSvg}</g>`
-          ).join('')}
-        </svg>
-      `.trim();
-    } else {
-      // Handle single color
-      svg = validSvgs[0];
-    }
-
-    // Encode the markup as base64
+    // Encode SVG to base64
     let encoded = Buffer.from(svg).toString("base64");
 
-    // Return the SVG as a data URL
+    // Return as a data URL
     return coda.SvgConstants.DataUrlPrefix + encoded;
   },
 });
