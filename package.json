@@ -1,12 +1,12 @@
 {
   "name": "hsluv",
   "version": "1.0.0",
-  "description": "",
+  "description": "A comprehensive Coda Pack for HSLuv color space conversions, accessibility analysis, and color manipulation",
   "main": "hsluv.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
+  "author": "Coda HSLuv Pack",
   "license": "ISC",
   "dependencies": {
     "@codahq/packs-sdk": "^1.7.16"
